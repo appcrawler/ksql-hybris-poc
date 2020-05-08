@@ -1,0 +1,9 @@
+set cli column-width 25
+select c.accountid,
+       c.affiliatecode,
+       ifnull(a.businessnaturecode,'A') as businessnaturecode, 
+       a.accountid
+  from consignment_simple_fields_rekey c 
+    left join ACCOUNTS_REKEY_T a on a.rowkey = c.accountid 
+  emit changes;
+

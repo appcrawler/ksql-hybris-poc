@@ -1,0 +1,11 @@
+create stream account_types_raw_s (
+  "entity" struct<
+     "aboNumber" varchar,
+     "businessNatureCode" varchar
+  >,
+  "eventInfo" struct<
+     "affiliateCode" varchar
+  >)
+  with (kafka_topic = 'account-types',  
+        value_format = 'JSON');
+

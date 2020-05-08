@@ -1,0 +1,12 @@
+set cli column-width 25
+select *
+  from consignment_events_raw_s 
+  emit changes;
+
+select *
+  from consignment_events_flat_s 
+  emit changes;
+
+select entity->salesaccount->accountid
+  from consignment_events_raw_s
+  emit changes;

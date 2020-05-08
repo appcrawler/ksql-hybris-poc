@@ -1,0 +1,106 @@
+set 'auto.offset.reset'='earliest';
+--map stream to DMS events for account
+create stream accounts_raw_s (
+  "entity" struct<
+     "aboNumber" varchar,
+     "businessNatureCode" varchar
+  >,
+  "eventInfo" struct<
+     "affiliateCode" varchar
+  >)
+  with (kafka_topic = 'accounts',
+        value_format = 'JSON');
+
+--map stream to DMS events for sub accounts.  Remove what fields you don't need
+
+create stream sub_accounts_raw_s (
+  "entity" struct<
+    "aboNumber"  varchar,
+    blackListFlag  varchar,
+    businessEntityCode  varchar,
+    "businessNatureCode"  varchar,
+    creditLimitAmount  varchar,
+    creditStatusCode  varchar,
+    distributorLatinName  varchar,
+    distributorName  varchar,
+    distributorName2  varchar,
+    entryDate  varchar,
+    expirationDate  varchar,
+    homeAboNumber  varchar,
+    imcTypeCode  varchar,
+    includeExcludeFlag  varchar,
+    isoCountryCode  varchar,
+    isoCurrencyCode  varchar,
+    languageCode  varchar,
+    legalEntityTypeCode  varchar,
+    loaCode  varchar,
+    missingInfoFlag  varchar,
+    multiBusinessIndicatorFlag  varchar,
+    newSponsorAbo  varchar,
+    newSponsorAffiliate  varchar,
+    orderLimitAmount  varchar,
+    previousBusinessNatureCode  varchar,
+    previousPricingPrivilegeFlag  varchar,
+    processDate  varchar,
+    reInstateFlag  varchar,
+    regionInternationalPrimaryBusinessFlag  varchar,
+    regionInternationalSponsorAboNumber  varchar,
+    regionInternationalSponsorAffiliateNumber  varchar,
+    regionSponsorAboNumber  varchar,
+    segmentCode  varchar,
+    statusCode  varchar,
+    userPin varchar
+  >,
+  "eventInfo" struct<
+    "affiliateCode" varchar,
+    context struct<
+      unused_string varchar
+    >,
+    entityId varchar,
+    entityType varchar,
+    eventType varchar,
+    isoCountryCode varchar,
+    sourceApplication varchar,
+    sourceComponent varchar,
+    sourceEventId varchar,
+    sourceHost varchar,
+    sourceTimestamp varchar
+  >)
+  with (kafka_topic = 'sub-accounts', value_format = 'JSON');
+
+--this stream will retain events from both account and sub account DMS topics
+create stream accounts_all_s (
+  "aboNumber" varchar,
+  "businessNatureCode" varchar,
+  "affiliateCode" varchar
+  )
+  with (kafka_topic = 'accounts-all',
+        value_format = 'AVRO');
+
+--this will populate the combined stream of DMS events with events from the account topic
+insert into accounts_all_s
+  select "entity"->"aboNumber" as "aboNumber","entity"->"businessNatureCode" as "businessNatureCode","eventInfo"->"affiliateCode" as "affiliateCode"
+    from accounts_raw_s;
+
+--this will populate the combined stream of DMS events with events from the sub account topic
+insert into accounts_all_s
+  select "entity"->"aboNumber" as "aboNumber","entity"->"businessNatureCode" as "businessNatureCode","eventInfo"->"affiliateCode" as "affiliateCode"
+    from sub_accounts_raw_s;
+
+--this will rekey the combined account topic so we can join it to the Hybris events
+create stream accounts_rekey_s
+  with (value_format = 'AVRO') as
+  select *
+    from accounts_all_s
+    partition by "aboNumber";
+
+--this is a helper UDF, comment this out.  This simply sleeps a period of seconds to ensure the create stream immediately above has registered its schema
+--if you don't have this UDF, which you won't, simply runs eparately the statement below after what is above has completed. 
+--if you would like the UDF, le me know. (it's an anti-pattern, only here as a utility helper)
+select sleep(10) from CONSIGNMENT_EVENTS_FLAT_S emit changes limit 1;
+
+
+create table accounts_rekey_t
+  with (kafka_topic='ACCOUNTS_REKEY_S', value_format= 'AVRO', key = 'aboNumber');
+
+
